@@ -120,14 +120,22 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
                 ind = i;
             }
         }
-        // fenster* f = ((fenster*)(pDevice->fensterWin));
-        // fenster_text(f, 100, 100, "House", 8, 0x00ffffff);
-        // fenster_loop(f);
-        // fenster_rect(f, W / 4, H / 2, W / 2, H / 3, 0x00ff0000);
-        // fenster_text(f, 100, 100, "House", 1, 0x44444444);
+        static bool first = true;
+        fenster *f = ((fenster*)(pDevice->fensterWin));
+        if(first) 
+        {
+            fenster_open(f); 
+            fenster_loop(f);
+            first = false;
+        }
+        // need a float to string conversion
+        fenster_rect(f, W / 4, H / 2, W / 2, H / 3, 0x00ff0000);
+        fenster_text(f, 100, 100, "House", 4, 0x44444444);
+        fenster_loop(f);
         printf("Freq:%f, mag: %f\n", freqs[ind], max);
         totalFrameCount = 0;
     }
+
     
     (void)pOutput;
 }
@@ -143,10 +151,33 @@ int main(int argc, char** argv)
         .buf = buf,
     };
     
-    fenster_open(&f);
-    fenster_rect(&f, W / 4, H / 2, W / 2, H / 3, 0x00ff0000);
-    fenster_text(&f, 100, 100, "House", 1, 0x44444444);
-    fenster_loop(&f);
+    // fenster_open(&f);
+    // int test = 0;
+    // while(fenster_loop(&f) == 0)
+    // {
+    //     if (test < 2)
+    //     {
+    //         fenster_rect(&f, W / 4, H / 2, W / 2, H / 3, 0x00ff0000);
+    //         fenster_text(&f, 100, 100, "House", 1, 0x44444444);
+    //     }
+    //     if (test > 2)
+    //     {
+    //         ; // do nothing
+    //     }
+    //     if (test > 4)
+    //     {
+    //         fenster_rect(&f, W / 4, H / 2, W / 2, H / 3, 0x00ff0000);
+    //         fenster_text(&f, 100, 100, "FF", 1, 0x44444444);
+    //     }
+    //     test++;
+    // }
+    // fenster_loop(&f);
+    // fenster_rect(&f, W / 4, H / 2, W / 2, H / 3, 0x00ff0000);
+    // fenster_text(&f, 100, 100, "House", 1, 0x44444444);
+    // fenster_loop(&f);
+    // fenster_rect(&f, W / 4, H / 2, W / 2, H / 3, 0x00ff0000);
+    // fenster_text(&f, 100, 100, "FF", 1, 0x44444444);
+    // fenster_loop(&f);
 
     for(int i = 0; i < fftSize; i++)
     {
