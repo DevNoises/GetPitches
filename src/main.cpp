@@ -1,14 +1,16 @@
 #include "miniaudio.h" // audio capture
 #include "AudioFFT.h"  // fft 
 #include "drawUtils.h" // include fenster
+#include "allNotes.h"  // holds Note Data Arrays
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <vector>
 
-#define W 320
-#define H 240
+#define W 640 
+#define H 480 
 #define FLOATARRAYSIZE 20
+#define NUM_WIN_ALLOWED 3
 
 // Initialize once for fft
 #define FFTSIZE 8192 // must be power of 2
@@ -21,6 +23,109 @@ std::vector<float> re(audiofft::AudioFFT::ComplexSize(FFTSIZE) + PAD);
 std::vector<float> im(audiofft::AudioFFT::ComplexSize(FFTSIZE) + PAD);
 std::vector<float> output(FFTSIZE);
 audiofft::AudioFFT fft;
+
+
+struct SizingData
+{
+    const unsigned int legibleSizePixels = 16;
+    unsigned int resX;
+    unsigned int resY;
+    unsigned int screenSizeX;
+    unsigned int screenSizeY;
+    unsigned int scale;
+};
+
+struct WinData
+{
+    fenster* f = NULL;
+    bool isFirst = false;
+    float freq = 0.0;
+    float mag = 0.0;
+    unsigned int ind = 0;
+
+    WinData(fenster* a, bool b, float c, float d, unsigned int e)
+    {
+        f = a;
+        isFirst = b;
+        freq = c;
+        mag = d;
+        ind = e;
+    }
+};
+
+// display manager
+class Manager
+{
+public:
+    Manager(){}
+    ~Manager(){}
+
+    void initialize()
+    {
+        // clear all
+        for (int i = 0; i < NUM_WIN_ALLOWED; i++)
+        {
+            fensters[i] = NULL;
+        }
+
+        // create one window
+        uint32_t buf[W * H];
+        fensters[0] = new fenster{
+            .title = "hello",
+            .width = W,
+            .height = H,
+            .buf = buf,
+        };
+    }
+
+    void update(WinData winData)
+    {
+        // Draw results to graph
+        // fenster *f = ((fenster*)(pDevice->fensterWin));
+        // fenster* f = winData.f;
+
+        // convert float value to char *
+        static char freqString[FLOATARRAYSIZE];
+        snprintf(freqString, FLOATARRAYSIZE, "%0.0f", winData.freq);
+
+        if(winData.isFirst) 
+        {
+            initialize();
+            fenster* f = fensters[0];
+            fenster_open(f); 
+            fenster_loop(f);
+            // first = false;
+        }
+        fenster* f = fensters[0];
+        fenster_rect(f, 0, 0, W/2, H/2, 0x00333333); // clear
+        // fenster_rect(f, 0, 0, W, H, 0x00333333); // clear
+        // fenster_rect(f, W / 4, H / 2, W / 2, H / 3, 0x00ff0000);
+        unsigned int index = freqToIndex(winData.freq);
+        fenster_text(f, 0, 0, noteName[index], 3, 0xffffffff);
+        static char oct[FLOATARRAYSIZE];
+        snprintf(oct, FLOATARRAYSIZE, "%d", octave[index]);
+        fenster_text(f, 0, 100, oct, 3, 0xffffffff);
+        // fenster_text(f, 0, 0, freqString, 3, 0xffffffff);
+        fenster_loop(f);
+        // noteName[freqToIndex(winData.freq)];
+        // printf("Freq:%f, mag: %f\n", winData.freq, winData.mag);
+        printf("Freq:%f, mag: %f\n", winData.freq, winData.mag);
+        // totalFrameCount = 0;
+    }
+
+    /*
+    1. get freq
+    2. check if freq range is currently shown on screen
+        a. need to know viewport range and current viewport pos on freq bins 
+    */
+
+private:
+    // Entries to fensters should be dynamically allocated
+    fenster* fensters[NUM_WIN_ALLOWED];
+};
+
+// Global manager
+Manager manager;
 
 // This is what gets called on receiving audio data.
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
@@ -51,42 +156,33 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
                 ind = i;
             }
         }
+        static bool first = true;
 
         // convert float value to char *
         static char freqString[FLOATARRAYSIZE];
         snprintf(freqString, FLOATARRAYSIZE, "%0.0f", freqs[ind]);
 
         // Draw results to graph
-        static bool first = true;
-        fenster *f = ((fenster*)(pDevice->fensterWin));
-        if(first) 
-        {
-            fenster_open(f); 
-            fenster_loop(f);
-            first = false;
-        }
-        fenster_rect(f, 0, 0, W, H, 0x00333333); // clear
-        fenster_rect(f, W / 4, H / 2, W / 2, H / 3, 0x00ff0000);
-        fenster_text(f, 100, 100, freqString, 4, 0xffffffff);
-        fenster_loop(f);
-        printf("Freq:%f, mag: %f\n", freqs[ind], max);
+        // fenster *f = ((fenster*)(pDevice->fensterWin));
+        WinData winData(NULL, first, freqs[ind], max, ind);
+        manager.update(winData);
+        
         totalFrameCount = 0;
+        first = false;
     }
 
     (void)pOutput; // what the hell does this do?
 }
 
+
 int main(int argc, char** argv)
 {
-    // run();
-    uint32_t buf[W * H];
-    struct fenster f = {
-        .title = "hello",
-        .width = W,
-        .height = H,
-        .buf = buf,
-    };
-    
+    if (argc < 2) {
+        printf("No output file.\n");
+        return -1;
+    }
+
+    // Set up expected frequency bins
     for(int i = 0; i < fftSize; i++)
     {
         freqs[i] = (i * sampleRate) / fftSize;
@@ -99,10 +195,6 @@ int main(int argc, char** argv)
     ma_device_config deviceConfig;
     ma_device device;
 
-    if (argc < 2) {
-        printf("No output file.\n");
-        return -1;
-    }
 
     encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_f32, 1, sampleRate);
 
@@ -117,7 +209,7 @@ int main(int argc, char** argv)
     deviceConfig.sampleRate       = encoder.config.sampleRate;
     deviceConfig.dataCallback     = data_callback;
     deviceConfig.pUserData        = &encoder;
-    deviceConfig.fensterWin       = &f;
+    // deviceConfig.fensterWin       = &f;
 
     result = ma_device_init(NULL, &deviceConfig, &device);
     if (result != MA_SUCCESS) {
