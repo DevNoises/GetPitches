@@ -1,0 +1,5 @@
+rmdir build /s /q 
+mkdir build
+@REM g++ -g src/main.cpp src/miniaudio.c src/AudioFFT.cpp -o build/main.exe
+@REM g++ -g src/main.cpp src/miniaudio.c src/AudioFFT.cpp -lgdi32 -lwinmm -o build/main.exe
+g++ -g src/main.cpp src/miniaudio.c src/AudioFFT.cpp -lgdi32 -lwinmm -o build/main.exe

@@ -1,0 +1,7 @@
+build
+fenster-main
+miniaudio-master
+output
+*.exe
+*.wav
+*.ods
