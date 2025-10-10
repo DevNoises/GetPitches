@@ -2,7 +2,8 @@
 #define DEBCF8D4_652C_480D_A3E7_6F2146CFFA4D
 
 #define Wi 640
-#define He 480
+// #define He 480 
+#define He 720 
 
 #include "fenster.h"   // window and graphics
 
