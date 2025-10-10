@@ -7,8 +7,8 @@
 #include <stdio.h>
 #include <vector>
 
-#define W 640 
-#define H 480 
+#define W Wi
+#define H He
 #define FLOATARRAYSIZE 20
 #define NUM_WIN_ALLOWED 3
 
@@ -97,14 +97,19 @@ public:
             // first = false;
         }
         fenster* f = fensters[0];
-        fenster_rect(f, 0, 0, W/2, H/2, 0x00333333); // clear
+        fenster_rect(f, 0, 0, W, H, 0x00000000); // clear
+        viewPort.drawLHS(f, winData.freq);
+
         // fenster_rect(f, 0, 0, W, H, 0x00333333); // clear
         // fenster_rect(f, W / 4, H / 2, W / 2, H / 3, 0x00ff0000);
-        unsigned int index = freqToIndex(winData.freq);
-        fenster_text(f, 0, 0, noteName[index], 3, 0xffffffff);
-        static char oct[FLOATARRAYSIZE];
-        snprintf(oct, FLOATARRAYSIZE, "%d", octave[index]);
-        fenster_text(f, 0, 100, oct, 3, 0xffffffff);
+        // unsigned int index = freqToIndex(winData.freq);
+        // fenster_text(f, 0, 0, noteName[index], 3, 0xffffffff);
+
+        // static char oct[FLOATARRAYSIZE];
+        // snprintf(oct, FLOATARRAYSIZE, "%d", octave[index]);
+        // fenster_text(f, 0, 100, oct, 3, 0xffffffff);
+
+        
         // fenster_text(f, 0, 0, freqString, 3, 0xffffffff);
         fenster_loop(f);
         // noteName[freqToIndex(winData.freq)];
@@ -122,6 +127,45 @@ public:
 private:
     // Entries to fensters should be dynamically allocated
     fenster* fensters[NUM_WIN_ALLOWED];
+
+    struct ViewPort 
+    {
+        float baseFreq = 300.0;
+        float baseNote = 300.0;
+        
+        ViewPort(){}
+
+        void drawLHS(fenster* f, float freq)
+        {
+            unsigned int baseIndex = freqToIndex(freq);
+            float baseFreqLog = freqLog10[baseIndex];
+            
+            // float linesToDraw [20];
+            float convFactor = 800.0;
+            for (unsigned int i = baseIndex; i < NOTE_ARR_SIZE; i++)
+            {
+                float linePos = (freqLog10[i] - freqLog10[baseIndex]) * convFactor;
+                float yPos = H-10 - linePos;
+                // linesToDraw[i - baseIndex] = (freqLog10[i] - freqLog10[baseIndex]) * convFactor;
+                fenster_rect(f, 20, 0, 1, H, 0x00333333);
+                fenster_rect(f, 0, yPos, W, 1, 0x00333333);
+                const unsigned int fullToneMask = 0xAB5;
+                if ( fullToneMask & (1 << ((i % 12))) )
+                {
+                    fenster_text(f, 0, yPos-4, noteName[i], 2, 0xffffffff);
+                }
+
+                // fenster_rect(f, 0, H - (i * 10), W, 1, 0x00333333);
+                // printf("%f", H - linesToDraw[i-baseIndex]);
+                if (yPos <= 0)
+                {
+                    // only draw a few lines
+                    break;
+                }
+            }
+        }
+    };
+    ViewPort viewPort;
 };
 
 // Global manager

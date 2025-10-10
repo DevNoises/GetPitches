@@ -247,7 +247,7 @@ char noteName [][8]
     "B",
 };
 
-float FreqLog10 []
+float freqLog10 []
 {
     1.21354431853767,
     1.2386481750578,

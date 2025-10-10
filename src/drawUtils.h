@@ -1,10 +1,40 @@
 #ifndef DEBCF8D4_652C_480D_A3E7_6F2146CFFA4D
 #define DEBCF8D4_652C_480D_A3E7_6F2146CFFA4D
 
+#define Wi 640
+#define He 480
+
 #include "fenster.h"   // window and graphics
+
+#if MYDEBUG == 1
+#include <stdio.h>
+#endif
+
+static bool fenster_rect_bounds_is_safe(int posX, int posY, int cols, int rows)
+{
+  bool isBoundSafe = true;
+ 
+  int x_draw_range = posX + cols; 
+  int y_draw_range = posY + rows;
+  isBoundSafe = true;
+  if (x_draw_range > Wi || 
+      y_draw_range > He ||
+      x_draw_range <  0 ||
+      y_draw_range <  0
+  )
+  {
+    isBoundSafe = false;
+#if MYDEBUG == 1
+    printf("fenster_rect draw is out of bounds. Skip Drawing\n");
+    printf("x draw range: %d\ny draw range: %d\n", x_draw_range, y_draw_range);
+#endif
+  }
+  return isBoundSafe;
+}
 
 static void fenster_rect(struct fenster *f, int x, int y, int w, int h,
                          uint32_t c) {
+  if(!fenster_rect_bounds_is_safe(x,y,w,h)) { return; }
   for (int row = 0; row < h; row++) {
     for (int col = 0; col < w; col++) {
       fenster_pixel(f, x + col, y + row) = c;
@@ -33,5 +63,14 @@ static void fenster_text(struct fenster *f, int x, int y, char *s, int scale,
   }
 }
 
+static void fenster_circle(struct fenster *f, int x, int y, int r, uint32_t c) {
+  for (int dy = -r; dy <= r; dy++) {
+    for (int dx = -r; dx <= r; dx++) {
+      if (dx * dx + dy * dy <= r * r) {
+        fenster_pixel(f, x + dx, y + dy) = c;
+      }
+    }
+  }
+}
 
 #endif /* DEBCF8D4_652C_480D_A3E7_6F2146CFFA4D */
