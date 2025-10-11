@@ -74,4 +74,5 @@ static void fenster_circle(struct fenster *f, int x, int y, int r, uint32_t c) {
   }
 }
 
+
 #endif /* DEBCF8D4_652C_480D_A3E7_6F2146CFFA4D */

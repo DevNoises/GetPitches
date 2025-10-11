@@ -1,6 +1,7 @@
 build
 fenster-main
 miniaudio-master
+Yin-Pitch-Tracking-master
 output
 *.exe
 *.wav

@@ -9,6 +9,8 @@
 #include <deque>
 #include <math.h> // log
 
+#include "Yin.h"
+
 #define W Wi
 #define H He
 #define FLOATARRAYSIZE 20
@@ -22,11 +24,12 @@
 
 // Initialize once for fft
 #define FFTSIZE 8192 // must be power of 2
-// #define FFTSIZE 16384 // must be power of 2
-// const size_t fftSize = 8192; // must be power of 2
+// #define FFTSIZE 4096 // must be power of 2
 const unsigned int sampleRate = 48000;
-const unsigned int PAD = 10000;//500; // if you get segfault try making pad bigger
+const unsigned int PAD = 100000;//500; // if you get segfault try making pad bigger
 float freqs[FFTSIZE];
+float yinBuffer[FFTSIZE];
+int16_t yinBuffer2[FFTSIZE];
 std::vector<float> buf(audiofft::AudioFFT::ComplexSize(FFTSIZE) + PAD);
 std::vector<float> re(audiofft::AudioFFT::ComplexSize(FFTSIZE) + PAD);
 std::vector<float> im(audiofft::AudioFFT::ComplexSize(FFTSIZE) + PAD);
@@ -80,7 +83,7 @@ public:
         // create one window
         uint32_t buf[W * H];
         fensters[0] = new fenster{
-            .title = "hello",
+            .title = "Titler",
             .width = W,
             .height = H,
             .buf = buf,
@@ -89,49 +92,20 @@ public:
 
     void update(WinData winData)
     {
-        // Draw results to graph
-        // fenster *f = ((fenster*)(pDevice->fensterWin));
-        // fenster* f = winData.f;
-
-        // convert float value to char *
-        static char freqString[FLOATARRAYSIZE];
-        snprintf(freqString, FLOATARRAYSIZE, "%0.0f", winData.freq);
-
         if(winData.isFirst) 
         {
             initialize();
             fenster* f = fensters[0];
             fenster_open(f); 
             fenster_loop(f);
-            // first = false;
         }
+
         fenster* f = fensters[0];
         fenster_rect(f, 0, 0, W, H, 0x00000000); // clear
         viewPort.drawLHS(f, winData.freq, winData.mag);
-
-        // fenster_rect(f, 0, 0, W, H, 0x00333333); // clear
-        // fenster_rect(f, W / 4, H / 2, W / 2, H / 3, 0x00ff0000);
-        // unsigned int index = freqToIndex(winData.freq);
-        // fenster_text(f, 0, 0, noteName[index], 3, 0xffffffff);
-
-        // static char oct[FLOATARRAYSIZE];
-        // snprintf(oct, FLOATARRAYSIZE, "%d", octave[index]);
-        // fenster_text(f, 0, 100, oct, 3, 0xffffffff);
-
-        
-        // fenster_text(f, 0, 0, freqString, 3, 0xffffffff);
         fenster_loop(f);
-        // noteName[freqToIndex(winData.freq)];
-        // printf("Freq:%f, mag: %f\n", winData.freq, winData.mag);
         printf("Freq:%f, log10: %f, mag: %f\n", winData.freq, log10f(winData.freq), winData.mag);
-        // totalFrameCount = 0;
     }
-
-    /*
-    1. get freq
-    2. check if freq range is currently shown on screen
-        a. need to know viewport range and current viewport pos on freq bins 
-    */
 
 private:
     // Entries to fensters should be dynamically allocated
@@ -139,9 +113,10 @@ private:
 
     struct ViewPort 
     {
-        const unsigned int NUM_OF_LINES_EXPECTED = 23;
+        const unsigned int NUM_OF_LINES_EXPECTED = 35;
         float baseFreq = 300.0;
         unsigned int baseIndex = 40;
+        float currBase = 40;
         float convFactor = 800.0;
         unsigned int smoothingCount = 0;
         std::deque<float> smoothingBuf;
@@ -157,12 +132,13 @@ private:
         {
             skip = false;
             // volume filter and freq
-            if (mag > 400.0 && freq > 70 && freq < 1800)
+            if (freq > 70 && freq < 1800)
             {
-                // smoothing
+                // smoothing ((maybe isn't neccessary with new Yin))
                 smoothingBuf.push_front(freq);
                 if (smoothingBuf.size() == 3) 
                 { 
+                    // could do this without arrays, just the deque but lazy
                     float currVals[3];
                     int i = 0;
                     for (float val : smoothingBuf)
@@ -206,10 +182,7 @@ private:
                         freq = currVals[2];
                         printf("smoothing[2] !AB: %f, %f, %f\n", currVals[0], currVals[1], currVals[2]);
                     }
-                    // else if (A && B && !C)
-                    // {
-                    //     freq = 
-                    // }
+
                     smoothingBuf.pop_back();
                 }
                 
@@ -233,23 +206,23 @@ private:
                 {
                     // baseIndex remains the same
                 }
-            
-            
-            // fenster_rect(f, W/2, H - freqPos, 5, 5, 0xFFF426);
+                currBase = log10f(freq);
             }
-            else
+            else  // ends freq and mag filter
             {
                 skip = true;
                 smoothingBuf.clear(); // clear when prev input is bad
             }
 
+            currBase != freqLog10[baseIndex];
             for (unsigned int i = baseIndex; i < NOTE_ARR_SIZE; i++)
             {
                 float linePos = (freqLog10[i] - freqLog10[baseIndex]) * convFactor;
                 float yPos = H-10 - linePos;
-                // linesToDraw[i - baseIndex] = (freqLog10[i] - freqLog10[baseIndex]) * convFactor;
                 fenster_rect(f, 20, 0, 1, H, 0x00333333);
                 fenster_rect(f, 0, yPos, W, 1, 0x00333333);
+                
+                // toneMask to only print out the single letters A - G
                 const unsigned int fullToneMask = 0xAB5;
                 if ( fullToneMask & (1 << ((i % 12))) )
                 {
@@ -259,21 +232,17 @@ private:
                     fenster_text(f, 12, yPos-4, oct, 2, 0xffffffff);
                 }
 
-                // fenster_rect(f, 0, H - (i * 10), W, 1, 0x00333333);
-                // printf("%f", H - linesToDraw[i-baseIndex]);
                 if (yPos <= 0)
                 {
                     // only draw a few lines
-                    printf("lines drawn: %d", i - baseIndex - 1);
+                    // printf("lines drawn: %d", i - baseIndex - 1);
                     break;
                 }
             }
 
             // draw pitch tracker
-
             float baseFreqLog = freqLog10[baseIndex];
             float freqPos = log10f(freq);
-            // float freqPos = (log10f(freq) - baseFreqLog) * convFactor;
             if (freqMem.size() > 1000) {freqMem.pop_back();}
             if (skip)
             {
@@ -283,22 +252,18 @@ private:
             {
                 freqMem.push_front(freqPos);
             }
-            // freqMem.push_front(H-freqPos);
-            // for (int i = 0; i < freqMem.size(); i++)
+            
             int j = 0;
             for (float val : freqMem)
             {
                 float xPos = W - 15 - (j * 10);
-                // if (freqMem[i] < 1.0)
                 if (val < 1.0)
                 {
                 }
                 else
                 {
-                    // float yPos = H - ((freqMem[i] - baseFreqLog) * convFactor);
                     float yPos = H - ((val - baseFreqLog) * convFactor);
                     fenster_rect(f, xPos - 10, yPos, 5, 5, 0xFFF426);
-                    fenster_loop(f);
                 }
                 j++;
             }
@@ -317,37 +282,46 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
     // Each time this is called it has some number of frames. 
     // Track and Store frames and trigger once enough frames are collected.
     static ma_uint32 totalFrameCount = 0;
+    int16_t bufForYin [FFTSIZE + 500];
     for (int i = 0; i < frameCount; i++)
     {
-        buf[i + totalFrameCount] = ((float*)pInput)[i];
+        // buf[i + totalFrameCount] = ((float*)pInput)[i];
+        bufForYin[i + totalFrameCount] = ((int16_t*)pInput)[i];
     }
     totalFrameCount += frameCount;
 
     // Process stored frames.
     if (totalFrameCount >= FFTSIZE)
     {
+        // fft gone new friend with Yin
         // calculate fft and get max freq
-        fft.fft(buf.data(), re.data(), im.data());
+        // fft.fft(buf.data(), re.data(), im.data());
         float max = 0.0;
         int ind = 0;
-        for (int i = 0; i < re.size(); i++)
-        {
-            float current = re[i] * re[i];
-            if (current > max)
-            {
-                max = current;
-                ind = i;
-            }
-        }
+        // for (int i = 0; i < re.size(); i++)
+        // {
+        //     float current = re[i] * re[i];
+        //     if (current > max)
+        //     {
+        //         max = current;
+        //         ind = i;
+        //     }
+        // }
+
+        Yin yin;
+        Yin_init(&yin, FFTSIZE, 0.10);
+        float pitch = Yin_getPitch(&yin, bufForYin);
         static bool first = true;
+        printf("fuckckc");
 
         // convert float value to char *
-        static char freqString[FLOATARRAYSIZE];
-        snprintf(freqString, FLOATARRAYSIZE, "%0.0f", freqs[ind]);
+        // static char freqString[FLOATARRAYSIZE];
+        // snprintf(freqString, FLOATARRAYSIZE, "%0.0f", freqs[ind]);
 
         // Draw results to graph
         // fenster *f = ((fenster*)(pDevice->fensterWin));
-        WinData winData(NULL, first, freqs[ind], max, ind);
+        // WinData winData(NULL, first, freqs[ind], max, ind);
+        WinData winData(NULL, first, pitch, 0.0, 0.0);
         manager.update(winData);
         
         totalFrameCount = 0;
@@ -379,7 +353,8 @@ int main(int argc, char** argv)
     ma_device device;
 
 
-    encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_f32, 1, sampleRate);
+    // encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_f32, 1, sampleRate);
+    encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_s16, 1, sampleRate);
 
     if (ma_encoder_init_file(argv[1], &encoderConfig, &encoder) != MA_SUCCESS) {
         printf("Failed to initialize output file.\n");
