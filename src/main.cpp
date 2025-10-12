@@ -8,6 +8,7 @@
 #include <vector>
 #include <deque>
 #include <math.h> // log
+#include <mutex>
 
 #include "Yin.h"
 
@@ -21,12 +22,13 @@
 #define SCREEN_CM_W 59.77
 #define SCREEN_CM_H 33.62
 
+std::mutex fensterMutex;
 
 // Initialize once for fft
 #define FFTSIZE 8192 // must be power of 2
 // #define FFTSIZE 4096 // must be power of 2
 const unsigned int sampleRate = 48000;
-const unsigned int PAD = 100000;//500; // if you get segfault try making pad bigger
+const unsigned int PAD = 500;//500; // if you get segfault try making pad bigger
 float freqs[FFTSIZE];
 float yinBuffer[FFTSIZE];
 int16_t yinBuffer2[FFTSIZE];
@@ -69,9 +71,13 @@ struct WinData
 class Manager
 {
 public:
-    Manager(){}
+    Manager()
+    : firstWinOpen(false)
+    {
+    }
     ~Manager(){}
 
+    bool firstWinOpen;
     void initialize()
     {
         // clear all
@@ -90,22 +96,43 @@ public:
         };
     }
 
+    void emptyUpdate()
+    {
+        if (!firstWinOpen) { return; }
+        fenster_loop(fensters[0]);
+    }
+
     void update(WinData winData)
     {
+        static int update = 0;
+        printf("update: %d", update);
+        update++;
+
         if(winData.isFirst) 
         {
             initialize();
             fenster* f = fensters[0];
             fenster_open(f); 
             fenster_loop(f);
+            firstWinOpen = true;
         }
 
         fenster* f = fensters[0];
+        for (int keyNum : f->keys)
+        {
+            if(keyNum != 0)
+            {
+                printf("keyNum: %d", keyNum);
+            }
+        }
         fenster_rect(f, 0, 0, W, H, 0x00000000); // clear
         viewPort.drawLHS(f, winData.freq, winData.mag);
         fenster_loop(f);
+
         printf("Freq:%f, log10: %f, mag: %f\n", winData.freq, log10f(winData.freq), winData.mag);
     }
+
+
 
 private:
     // Entries to fensters should be dynamically allocated
@@ -121,12 +148,24 @@ private:
         unsigned int smoothingCount = 0;
         std::deque<float> smoothingBuf;
         std::deque<float> freqMem;
+        std::deque<float>* snapshots [5];
         bool skip = false;
 
         ViewPort()
         {
             baseIndex = freqToIndex(baseFreq);
         }
+
+        bool getSnapshot(std::deque<float>* newSnap)
+        {
+            if(freqMem.empty()) { return false;}
+            // std::deque<float>* newSnap = new std::deque<float>;
+            for (float val : freqMem)
+            {
+                newSnap->push_back(val);
+            }
+        }
+
 
         void drawLHS(fenster* f, float freq, float mag)
         {
@@ -197,9 +236,7 @@ private:
                 else if (inputIndex > baseIndex + NUM_OF_LINES_EXPECTED)
                 {
                     int newBase = inputIndex - (NUM_OF_LINES_EXPECTED + 5);
-                    // int newBase = inputIndex - (baseIndex + NUM_OF_LINES_EXPECTED + 5);
                     baseIndex = (newBase > 0) ? newBase : 0;
-                    // baseIndex = inputIndex - NUM_OF_LINES_EXPECTED;
                     printf("high: %d\n", baseIndex);
                 }
                 else
@@ -214,6 +251,7 @@ private:
                 smoothingBuf.clear(); // clear when prev input is bad
             }
 
+            // draw left hand lines and notes
             currBase != freqLog10[baseIndex];
             for (unsigned int i = baseIndex; i < NOTE_ARR_SIZE; i++)
             {
@@ -278,6 +316,9 @@ Manager manager;
 // This is what gets called on receiving audio data.
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
 {
+    static int callback = 0;
+    printf("callback: %d", callback);
+    callback++;
     // Each frame contains samples (1 sample per frame for my mono audio setup)
     // Each time this is called it has some number of frames. 
     // Track and Store frames and trigger once enough frames are collected.
@@ -322,7 +363,9 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
         // fenster *f = ((fenster*)(pDevice->fensterWin));
         // WinData winData(NULL, first, freqs[ind], max, ind);
         WinData winData(NULL, first, pitch, 0.0, 0.0);
+        fensterMutex.lock();
         manager.update(winData);
+        fensterMutex.unlock();
         
         totalFrameCount = 0;
         first = false;
@@ -344,7 +387,7 @@ int main(int argc, char** argv)
     {
         freqs[i] = (i * sampleRate) / FFTSIZE;
     }
-    fft.init(FFTSIZE);
+    // fft.init(FFTSIZE);
 
     ma_result result;
     ma_encoder_config encoderConfig;
@@ -352,6 +395,7 @@ int main(int argc, char** argv)
     ma_device_config deviceConfig;
     ma_device device;
 
+    // manager.initialize();
 
     // encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_f32, 1, sampleRate);
     encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_s16, 1, sampleRate);
@@ -382,6 +426,22 @@ int main(int argc, char** argv)
         return -3;
     }
 
+    int64_t now = fenster_time();
+    int count = 0;
+    while(1)
+    {
+        fensterMutex.lock();
+        printf("main: %d\n", count);
+        manager.emptyUpdate();
+        fensterMutex.unlock();
+        int64_t time = fenster_time();
+        if (time - now < 1000 / 60) 
+        {
+            fenster_sleep(time - now);
+        }
+        now = time;
+        count++;
+    }
     printf("Press Enter to stop recording...\n");
     getchar();
     
