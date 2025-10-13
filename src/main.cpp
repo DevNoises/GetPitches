@@ -169,14 +169,18 @@ private:
 public:
     struct ViewPort 
     {
-        const unsigned int NUM_OF_LINES_EXPECTED = 23;
+        const unsigned int NUM_OF_LINES_EXPECTED = 20;
+        const unsigned int TARGET_BUFFER = 5;
         unsigned int baseIndex = 25;
         unsigned int targetIndex= 25;
         float delta = 0.0;
+        int deltaFactor = 1;
+        bool targetReached = true;
         float convFactor = 800.0;
         unsigned int smoothingCount = 0;
         std::deque<float> smoothingBuf;
         std::deque<float>* snapshots [5];
+
 
         ViewPort()
         {
@@ -195,101 +199,121 @@ public:
         void setViewBase(fenster* f, float freq)
         {
             // volume filter and freq
+            printf("Freq:%f, log10: %f, invLog10: %f\n", freq, log10f(invLog10(freq)), invLog10(freq));
             if (freq > log10f(70) && freq < log10f(1800))
             {
-                // control baseIndex position
-                unsigned int inputIndex = freqToIndex(logf(freq));
-                if (inputIndex < baseIndex)
+                // control baseIndex position (should work off single freq input)
+                unsigned int inputIndex = freqToIndex(invLog10(freq));
+                if (inputIndex <= baseIndex + TARGET_BUFFER)
                 {
                     // target low
-                    int newBase = inputIndex - 5;
+                    if (inputIndex == baseIndex + TARGET_BUFFER)
+                    {
+                        targetReached = true;
+                        // finalApproach = true;
+                        return;
+                    }
+                    targetReached = false;
+                    int newBase = inputIndex - TARGET_BUFFER;
                     targetIndex = (newBase >= 0) ? newBase : 0;
-                    delta = (freqLog10[baseIndex] - freqLog10[targetIndex]) / 10;
+                    // delta = (freqLog10[baseIndex] - freqLog10[targetIndex]) / 10;
+                    delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 10; // -delta
                     printf("low: inputIndex: %d, baseIndex: %d, targetIndex: %d, delta: %f\n", inputIndex, baseIndex, targetIndex, delta);
                 }
-                else if (inputIndex > baseIndex + NUM_OF_LINES_EXPECTED)
+                else if (inputIndex >= baseIndex + NUM_OF_LINES_EXPECTED - TARGET_BUFFER)
                 {
                     // target high
-                    int newBase = inputIndex - (NUM_OF_LINES_EXPECTED + 5);
+                    if ( ((inputIndex - NUM_OF_LINES_EXPECTED + TARGET_BUFFER) == targetIndex) )
+                    {
+                        targetReached = true;
+                        return;
+                    }
+                    targetReached = false;
+                    int newBase = inputIndex - NUM_OF_LINES_EXPECTED + TARGET_BUFFER;
                     targetIndex = (newBase >= 0) ? newBase : 0;
-                    delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 10;
+                    delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 10; // +delta
                     printf("high: inputIndex: %d, baseIndex: %d, targetIndex: %d, delta: %f\n", inputIndex, baseIndex, targetIndex, delta);
                 }
                 else
                 {
                     // baseIndex remains the same
+                    // no new target needs to be set
                 }
-                // currBase = log10f(freq);
             }
-            
-
-            // draw pitch tracker
-        //     int j = 0;
-        //     for (float val : freqMem)
-        //     {
-        //         float xPos = W - 15 - (j * 10);
-        //         if (val < 1.0)
-        //         {
-        //             // don't not draw if freq input is 0.0 / bad
-        //         }
-        //         else
-        //         {
-        //             float yPos = H - ((val - baseFreqLog) * convFactor);
-        //             fenster_rect(f, xPos - 10, yPos, 5, 5, 0xFFF426);
-        //         }
-        //         j++;
-        //     }
         }
 
         // Called without a new freq
         void drawNoteLines(fenster* f)
         {
             printf("drawNotesLines\n");
-            static int deltaFactor = 1;
             // update baseIndex as needed
             float offset = delta * deltaFactor;
             bool increaseBaseIndex = true;
             int i = 1;
             bool isIncremented = false;
-            while (increaseBaseIndex)
+
+            if (baseIndex != targetIndex)
             {
-                if (delta > 0)
+                while (increaseBaseIndex)
                 {
-                    if (freqLog10[baseIndex] + offset >= freqLog10[baseIndex + i]) 
+                    if (delta > 0)
                     {
-                        // baseIndex++;
-                        isIncremented = true;
-                    }
-                    else
-                    {
-                        increaseBaseIndex = false;
-                        if (isIncremented)
+                        if (freqLog10[baseIndex] + offset >= freqLog10[baseIndex + i]) 
                         {
-                            baseIndex += i;
-                            deltaFactor = 0;
+                            i++;
+                            isIncremented = true;
+                            //edgecase
+                            if (baseIndex > targetIndex)
+                            {
+                                baseIndex = targetIndex;
+                                deltaFactor = 0;
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            increaseBaseIndex = false;
+                            if (isIncremented)
+                            {
+                                baseIndex += (i - 1);
+                                deltaFactor = 0;
+                            }
                         }
                     }
-                }
-                else
-                {
-                    if (freqLog10[baseIndex] + offset <= freqLog10[baseIndex - i])
-                    {
-                        // baseIndex--;
-                        isIncremented = true;
-                    }
                     else
                     {
-                        increaseBaseIndex = false;
-                        if (isIncremented)
+                        if (freqLog10[baseIndex] + offset <= freqLog10[baseIndex - i])
                         {
-                            baseIndex -= i;
-                            deltaFactor = 0;
+                            i++;
+                            isIncremented = true;
+                            //edgecase
+                            if (baseIndex < targetIndex)
+                            {
+                                baseIndex = targetIndex;
+                                deltaFactor = 0;
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            increaseBaseIndex = false;
+                            if (isIncremented)
+                            {
+                                baseIndex -= (i - 1);
+                                deltaFactor = 0;
+                            }
                         }
                     }
                 }
             }
-            printf("delta: %f, factor: %d, baseIndex: %d\n", delta, deltaFactor, baseIndex);
+            else
+            {
+                deltaFactor = 0;
+            }
+            printf("delta: %f, factor: %d, baseIndex: %d, targetIndex: %d\n", delta, deltaFactor, baseIndex, targetIndex);
+            
             // draw
+            offset = delta * deltaFactor;
             for (unsigned int i = baseIndex; i < NOTE_ARR_SIZE; i++)
             {
                 float linePos = (freqLog10[i] - freqLog10[baseIndex] + offset) * convFactor;
@@ -314,7 +338,35 @@ public:
                     break;
                 }
             }
-            deltaFactor++;
+            if (isIncremented)
+            {
+                deltaFactor = 1;
+            }
+            else
+            {
+                deltaFactor++;
+            }
+        }
+
+        // draw pitch tracker
+        void drawPitch(fenster* f)
+        {
+            int j = 0;
+            float baseFreqLog = freqLog10[baseIndex];
+            for (float val : freqMem)
+            {
+                float xPos = W - 15 - (j * 10);
+                if (val < 1.0)
+                {
+                    // don't not draw if freq input is 0.0 / bad
+                }
+                else
+                {
+                    float yPos = H - ((val - baseFreqLog) * convFactor);
+                    fenster_rect(f, xPos - 10, yPos, 5, 5, 0xFFF426);
+                }
+                j++;
+            }
         }
     };
     ViewPort viewPort;
@@ -465,6 +517,7 @@ int main(int argc, char** argv)
             fenster_rect(f, 0, 0, W, H, 0x00993939); // clear
             manager.viewPort.setViewBase(f, freqMem.front());
             manager.viewPort.drawNoteLines(f);
+            manager.viewPort.drawPitch(f);
             fenster_loop(f);
             printf("freqMem size: %d\n", freqMem.size());
         }

@@ -8,4 +8,4 @@ mkdir build
 g++ -D MYDEBUG=0 -g src/main.cpp src/miniaudio.c src/AudioFFT.cpp src/Yin.c -lgdi32 -lwinmm -o build/main.exe
 
 @REM release build
-@REM g++ src/main.cpp src/miniaudio.c src/AudioFFT.cpp src/Yin.c -lgdi32 -lwinmm -o build/main.exe
+@REM g++ src/main.cpp src/miniaudio.c src/AudioFFT.cpp src/Yin.c -lgdi32 -lwinmm -o build/main.exe -O2

@@ -1,4 +1,6 @@
 #define NOTE_ARR_SIZE 123
+#include <cmath>
+
 float frequencyHz []
 {
     16.351,
@@ -520,4 +522,9 @@ static unsigned int freqToIndex(float freq)
         }
     }
     return NOTE_ARR_SIZE / 2;
+}
+
+float invLog10(float x)
+{
+    return powf(10, x);
 }
