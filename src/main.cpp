@@ -26,6 +26,8 @@ std::mutex fensterMutex;
 
 // Initialize once for fft
 #define FFTSIZE 8192 // must be power of 2
+#define NUM_SNAPSHOTS 5
+
 // #define FFTSIZE 4096 // must be power of 2
 const unsigned int sampleRate = 48000;
 const unsigned int PAD = 500;//500; // if you get segfault try making pad bigger
@@ -38,6 +40,9 @@ std::vector<float> im(audiofft::AudioFFT::ComplexSize(FFTSIZE) + PAD);
 std::vector<float> output(FFTSIZE);
 audiofft::AudioFFT fft;
 std::deque<float> freqMem;
+std::deque<float>* savedFreqMem [5];
+bool displaySnapshots = false;
+unsigned int displayCount = 0;
 
 struct SizingData
 {
@@ -175,31 +180,55 @@ public:
         unsigned int targetIndex= 25;
         float delta = 0.0;
         int deltaFactor = 1;
+        float offset = 0.0;
         bool targetReached = true;
         float convFactor = 800.0;
         unsigned int smoothingCount = 0;
         std::deque<float> smoothingBuf;
-        std::deque<float>* snapshots [5];
+        // std::deque<float>* snapshots [NUM_SNAPSHOTS];
+        unsigned int snapCount = 0;
 
 
         ViewPort()
         {
+            for (int i = 0; i < NUM_SNAPSHOTS; i++)
+            {   
+                std::deque<float>* newSnap = new std::deque<float>;
+                savedFreqMem[i] = newSnap;
+            }
+            snapCount = 0;
         }
 
-        bool getSnapshot(std::deque<float>* newSnap)
+        void nextSnap()
         {
-            if(freqMem.empty()) { return false;}
-            // std::deque<float>* newSnap = new std::deque<float>;
+            displayCount = (displayCount + 1) % 5;
+            printf("displayCount set to %d\n", displayCount);
+        }
+        
+        void nextSnapCount()
+        {
+            snapCount = displayCount;
+            printf("displayCount and snapCount set to %d\n", snapCount);
+        }
+
+        
+        bool saveSnapshot()
+        {
+            if(freqMem.empty()) { return false; }
+            savedFreqMem[snapCount]->clear();
             for (float val : freqMem)
             {
-                newSnap->push_back(val);
+                savedFreqMem[snapCount]->push_back(val);
             }
+            printf("saved snapshot to %d\n", snapCount);
+            snapCount = (snapCount + 1) % 5;
+            return true;
         }
-
+        
         void setViewBase(fenster* f, float freq)
         {
             // volume filter and freq
-            printf("Freq:%f, log10: %f, invLog10: %f\n", freq, log10f(invLog10(freq)), invLog10(freq));
+            // printf("Freq:%f, log10: %f, invLog10: %f\n", freq, log10f(invLog10(freq)), invLog10(freq));
             if (freq > log10f(70) && freq < log10f(1800))
             {
                 // control baseIndex position (should work off single freq input)
@@ -218,7 +247,7 @@ public:
                     targetIndex = (newBase >= 0) ? newBase : 0;
                     // delta = (freqLog10[baseIndex] - freqLog10[targetIndex]) / 10;
                     delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 10; // -delta
-                    printf("low: inputIndex: %d, baseIndex: %d, targetIndex: %d, delta: %f\n", inputIndex, baseIndex, targetIndex, delta);
+                    // printf("low: inputIndex: %d, baseIndex: %d, targetIndex: %d, delta: %f\n", inputIndex, baseIndex, targetIndex, delta);
                 }
                 else if (inputIndex >= baseIndex + NUM_OF_LINES_EXPECTED - TARGET_BUFFER)
                 {
@@ -232,7 +261,7 @@ public:
                     int newBase = inputIndex - NUM_OF_LINES_EXPECTED + TARGET_BUFFER;
                     targetIndex = (newBase >= 0) ? newBase : 0;
                     delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 10; // +delta
-                    printf("high: inputIndex: %d, baseIndex: %d, targetIndex: %d, delta: %f\n", inputIndex, baseIndex, targetIndex, delta);
+                    // printf("high: inputIndex: %d, baseIndex: %d, targetIndex: %d, delta: %f\n", inputIndex, baseIndex, targetIndex, delta);
                 }
                 else
                 {
@@ -245,9 +274,9 @@ public:
         // Called without a new freq
         void drawNoteLines(fenster* f)
         {
-            printf("drawNotesLines\n");
+            // printf("drawNotesLines\n");
             // update baseIndex as needed
-            float offset = delta * deltaFactor;
+            offset = delta * deltaFactor;
             bool increaseBaseIndex = true;
             int i = 1;
             bool isIncremented = false;
@@ -310,7 +339,7 @@ public:
             {
                 deltaFactor = 0;
             }
-            printf("delta: %f, factor: %d, baseIndex: %d, targetIndex: %d\n", delta, deltaFactor, baseIndex, targetIndex);
+            // printf("delta: %f, factor: %d, baseIndex: %d, targetIndex: %d\n", delta, deltaFactor, baseIndex, targetIndex);
             
             // draw
             offset = delta * deltaFactor;
@@ -349,11 +378,13 @@ public:
         }
 
         // draw pitch tracker
-        void drawPitch(fenster* f)
+        // void drawPitch(fenster* f)
+        void drawPitch(fenster* f, const std::deque<float>* frequenciesLog)
+
         {
             int j = 0;
             float baseFreqLog = freqLog10[baseIndex];
-            for (float val : freqMem)
+            for (float val : *frequenciesLog)
             {
                 float xPos = W - 15 - (j * 10);
                 if (val < 1.0)
@@ -362,7 +393,7 @@ public:
                 }
                 else
                 {
-                    float yPos = H - ((val - baseFreqLog) * convFactor);
+                    float yPos = H - ((val - baseFreqLog + offset) * convFactor);
                     fenster_rect(f, xPos - 10, yPos, 5, 5, 0xFFF426);
                 }
                 j++;
@@ -379,7 +410,7 @@ Manager manager;
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
 {
     static int callback = 0;
-    printf("callback: %d\n", callback);
+    // printf("callback: %d\n", callback);
     callback++;
     // Each frame contains samples (1 sample per frame for my mono audio setup)
     // Each time this is called it has some number of frames. 
@@ -440,6 +471,45 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
 }
 
 
+void processKeys(fenster* f)
+{
+    if (f->keys[83])
+    {
+        bool success = false;
+        if(manager.viewPort.saveSnapshot())
+        {
+            success = true;
+        }
+        printf("saveSnapshot status: %d\n", success);
+        f->keys[83] = 0;
+    }
+
+    if (f->keys[67])
+    {
+        // cycle to next snapshot
+        manager.viewPort.nextSnap();
+        f->keys[67] = 0;
+    }
+
+    if (f->keys[68])
+    {
+        // display
+        displaySnapshots = (displaySnapshots) ? false : true;
+        printf("display set to %d\n", displaySnapshots);
+        f->keys[67] = 0;
+    }
+    
+    if (f->keys[79]) // O/verwrite
+    {
+        // display
+        printf("overwriting snap %d\n", displayCount);
+        manager.viewPort.nextSnapCount();
+        manager.viewPort.saveSnapshot();
+
+        f->keys[79] = 0;
+    }
+}
+
 int main(int argc, char** argv)
 {
     if (argc < 2) {
@@ -494,12 +564,9 @@ int main(int argc, char** argv)
     int count = 0;
     while(1)
     {
-        // update 
-        // fensterMutex.lock();
+        
 
-        // Sleep(1000);
-        // printf("main:\n");
-        // manager.emptyUpdate();
+        // fensterMutex.lock();
         if (!freqMem.empty() && !manager.isInitialized()) 
         {
             manager.setReady();
@@ -517,9 +584,16 @@ int main(int argc, char** argv)
             fenster_rect(f, 0, 0, W, H, 0x00993939); // clear
             manager.viewPort.setViewBase(f, freqMem.front());
             manager.viewPort.drawNoteLines(f);
-            manager.viewPort.drawPitch(f);
+            manager.viewPort.drawPitch(f, &freqMem);
+            if (displaySnapshots)
+            {
+                manager.viewPort.drawPitch(f, savedFreqMem[displayCount]);
+            }
+            processKeys(f);
+
             fenster_loop(f);
-            printf("freqMem size: %d\n", freqMem.size());
+
+            // printf("freqMem size: %d\n", freqMem.size());
         }
         //     printf("main\n");
         //     manager.viewPort.drawNoteLines(f);
