@@ -36,8 +36,8 @@ static bool fenster_rect_bounds_is_safe(int posX, int posY, int cols, int rows)
 static void fenster_rect(struct fenster *f, int x, int y, int w, int h,
                          uint32_t c) {
   if(!fenster_rect_bounds_is_safe(x,y,w,h)) { return; }
-  for (int row = 0; row < h; row++) {
-    for (int col = 0; col < w; col++) {
+  for (int row = 0; row < h-1; row++) {
+    for (int col = 0; col < w-1; col++) {
       fenster_pixel(f, x + col, y + row) = c;
     }
   }

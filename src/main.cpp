@@ -23,6 +23,8 @@
 #define SCREEN_CM_W 59.77
 #define SCREEN_CM_H 33.62
 
+// #define YIN_OFFSET_COEFFICIENT 1.01419582566  // Yin algo a little off, apply to log values
+#define YIN_OFFSET_COEFFICIENT 1.02  // Yin algo a little off, apply to log values
 std::mutex fensterMutex;
 
 // Initialize once for fft
@@ -188,8 +190,8 @@ private:
 public:
     struct ViewPort 
     {
-        const unsigned int NUM_OF_LINES_EXPECTED = 20;
-        const unsigned int TARGET_BUFFER = 5;
+        const unsigned int NUM_OF_LINES_EXPECTED = 30;
+        const unsigned int TARGET_BUFFER = 10;
         unsigned int baseIndex = 25;
         unsigned int targetIndex= 25;
         float delta = 0.0;
@@ -361,8 +363,8 @@ public:
             {
                 float linePos = (freqLog10[i] - freqLog10[baseIndex] + offset) * convFactor;
                 float yPos = H-10 - linePos;
-                fenster_rect(f, 20, 0, 1, H, 0x00333333);
-                fenster_rect(f, 0, static_cast<int>(yPos), W, 1, 0x00333333);
+                fenster_rect(f, 20, 0, 2, H-1, 0x00333333);
+                fenster_rect(f, 0, static_cast<int>(yPos), W-1, 2, 0x00333333);
                 
                 // toneMask to only print out the single letters A - G
                 const unsigned int fullToneMask = 0xAB5;
@@ -408,6 +410,7 @@ public:
                 else
                 {
                     float yPos = H - ((val - baseFreqLog + offset) * convFactor);
+                    // fenster_rect(f, static_cast<int>(xPos - 10), static_cast<int>(yPos), 5, 5, 0xFFF426);
                     fenster_rect(f, static_cast<int>(xPos - 10), static_cast<int>(yPos), 5, 5, 0xFFF426);
                 }
                 j++;
@@ -457,7 +460,7 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
         // }
 
         Yin yin;
-        const float uncertainty = 0.20;
+        const float uncertainty = 0.05;
         Yin_init(&yin, FFTSIZE, uncertainty);
         // Yin_init(&yin, FFTSIZE, 0.10);
         float pitch = Yin_getPitch(&yin, bufForYin);
@@ -471,7 +474,7 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
         if (freqMem.size() > MAX_DEQUE_SIZE) {freqMem.pop_back(); printf("popped: %d\n", popped);}
         if (pitch > 70.0)
         {
-            freqMem.push_front(log10f(pitch));
+            freqMem.push_front(log10f(pitch) * YIN_OFFSET_COEFFICIENT);
         }
         else
         {

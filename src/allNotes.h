@@ -503,21 +503,27 @@ static unsigned int freqToIndex(float freq)
     unsigned int half = NOTE_ARR_SIZE / 2;
     if (freq > frequencyHz[half])
     {
-        for (int i = half; i < NOTE_ARR_SIZE; i++)
+        for (int i = half; i < NOTE_ARR_SIZE - 1; i++)
         {
-            int diff = freq - frequencyHz[i];
-            if (diff <= 0) {
-                return i;
+            int diff_i1 = freq - frequencyHz[i];
+            if (diff_i1 <= 0) 
+            {
+                int diff_i2 = frequencyHz[i-1] - freq;
+                int index = (diff_i1 < diff_i1) ? i : i + 1;
+                return index;
             }
         }
     }
     else
     {
-        for (int i = half; i > 0; i--)
+        for (int i = 1; i <= half; i++)
         {
-            int diff = frequencyHz[i] - freq;
-            if (diff <= 0) {
-                return i;
+            int diff_i1 = freq - frequencyHz[i];
+            if (diff_i1 <= 0) 
+            {
+                int diff_i2 = frequencyHz[i-1] - freq;
+                int index = (diff_i1 < diff_i1) ? i : i + 1;
+                return index;
             }
         }
     }
