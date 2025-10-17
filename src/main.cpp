@@ -16,6 +16,7 @@
 #define H He
 #define FLOATARRAYSIZE 20
 #define NUM_WIN_ALLOWED 3
+#define MAX_DEQUE_SIZE 300
 
 #define SCREEN_RES_W 2560
 #define SCREEN_RES_H 1440
@@ -25,7 +26,20 @@
 std::mutex fensterMutex;
 
 // Initialize once for fft
-#define FFTSIZE 8192 // must be power of 2
+/*
+FFTSIZE |  Period Sampled (ms)
+256     |  5.3
+512     |  10.7
+1024    |  21.3                 |  minimum for A2(110Hz) (18.18 ms = 2T)
+2048    |  42.7
+4096    |  85.3
+8192    |  171.0
+32768   |  683.0
+
+
+*/
+// #define FFTSIZE 8192 // must be power of 2
+#define FFTSIZE 1024 // must be power of 2
 #define NUM_SNAPSHOTS 5
 
 // #define FFTSIZE 4096 // must be power of 2
@@ -348,7 +362,7 @@ public:
                 float linePos = (freqLog10[i] - freqLog10[baseIndex] + offset) * convFactor;
                 float yPos = H-10 - linePos;
                 fenster_rect(f, 20, 0, 1, H, 0x00333333);
-                fenster_rect(f, 0, yPos, W, 1, 0x00333333);
+                fenster_rect(f, 0, static_cast<int>(yPos), W, 1, 0x00333333);
                 
                 // toneMask to only print out the single letters A - G
                 const unsigned int fullToneMask = 0xAB5;
@@ -394,7 +408,7 @@ public:
                 else
                 {
                     float yPos = H - ((val - baseFreqLog + offset) * convFactor);
-                    fenster_rect(f, xPos - 10, yPos, 5, 5, 0xFFF426);
+                    fenster_rect(f, static_cast<int>(xPos - 10), static_cast<int>(yPos), 5, 5, 0xFFF426);
                 }
                 j++;
             }
@@ -443,15 +457,18 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
         // }
 
         Yin yin;
-        Yin_init(&yin, FFTSIZE, 0.10);
+        const float uncertainty = 0.20;
+        Yin_init(&yin, FFTSIZE, uncertainty);
+        // Yin_init(&yin, FFTSIZE, 0.10);
         float pitch = Yin_getPitch(&yin, bufForYin);
         // static bool first = true;
 
         // WinData winData(NULL, first, pitch, 0.0, 0.0);
         
         fensterMutex.lock();
-
-        if (freqMem.size() > 1000) {freqMem.pop_back();}
+        static int popped = 0;
+        popped++;
+        if (freqMem.size() > MAX_DEQUE_SIZE) {freqMem.pop_back(); printf("popped: %d\n", popped);}
         if (pitch > 70.0)
         {
             freqMem.push_front(log10f(pitch));
@@ -533,6 +550,7 @@ int main(int argc, char** argv)
 
     // encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_f32, 1, sampleRate);
     encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_s16, 1, sampleRate); // s16 for Yin algo
+    // encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_s16, 1, ma_standard_sample_rate_192000); // s16 for Yin algo
 
     if (ma_encoder_init_file(argv[1], &encoderConfig, &encoder) != MA_SUCCESS) {
         printf("Failed to initialize output file.\n");
@@ -566,7 +584,7 @@ int main(int argc, char** argv)
     {
         
 
-        // fensterMutex.lock();
+        fensterMutex.lock();
         if (!freqMem.empty() && !manager.isInitialized()) 
         {
             manager.setReady();
@@ -598,7 +616,7 @@ int main(int argc, char** argv)
         //     printf("main\n");
         //     manager.viewPort.drawNoteLines(f);
             
-        // fensterMutex.unlock();
+        fensterMutex.unlock();
 
         // sleep 
         int64_t time = fenster_time();
