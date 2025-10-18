@@ -225,28 +225,52 @@ public:
             // offset is used to display shifts in view 
             // once target is reached, baseIndex is updated and offset is reset.
             offset = delta * deltaFactor;
-            bool increaseBaseIndex = true;
+            bool updateBaseIndex = true;
             int i = 0;
             bool isIncremented = false;
 
             if (baseIndex != targetIndex)
             {
-                if (delta > 0)
+                if(delta > 0)
                 {
-                    if (freqLog10[baseIndex] + offset >= freqLog10[targetIndex]) 
+                    if(freqLog10[baseIndex] + offset >= freqLog10[baseIndex + 1])
                     {
-                        baseIndex = targetIndex;
                         deltaFactor = 0;
+                        baseIndex = baseIndex + 1;
+                        if(baseIndex > targetIndex)
+                        {
+                            baseIndex = targetIndex;
+                        }
                     }
                 }
                 else
                 {
-                    if (freqLog10[baseIndex] + offset <= freqLog10[targetIndex])
+                    if(freqLog10[baseIndex] + offset <= freqLog10[baseIndex - 1])
                     {
-                        baseIndex = targetIndex;
                         deltaFactor = 0;
+                        baseIndex = baseIndex - 1;
+                        if(baseIndex < targetIndex)
+                        {
+                            baseIndex = targetIndex;
+                        }
                     }
                 }
+                // if (delta > 0)
+                // {
+                //     if (freqLog10[baseIndex] + offset >= freqLog10[targetIndex]) 
+                //     {
+                //         baseIndex = targetIndex;
+                //         deltaFactor = 0;
+                //     }
+                // }
+                // else
+                // {
+                //     if (freqLog10[baseIndex] + offset <= freqLog10[targetIndex])
+                //     {
+                //         baseIndex = targetIndex;
+                //         deltaFactor = 0;
+                //     }
+                // }
             }
             else
             {
