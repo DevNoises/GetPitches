@@ -1,8 +1,12 @@
+// from github
 #include "miniaudio.h" // audio capture
-#include "AudioFFT.h"  // fft 
+#include "Yin.h"
+
+// helper headers
 #include "drawUtils.h" // include fenster
 #include "allNotes.h"  // holds Note Data Arrays
 
+// standards
 #include <stdlib.h>
 #include <stdio.h>
 #include <vector>
@@ -10,11 +14,9 @@
 #include <math.h> // log
 #include <mutex>
 
-#include "Yin.h"
-
+// defines
 #define W Wi
 #define H He
-#define FLOATARRAYSIZE 20
 #define NUM_WIN_ALLOWED 3
 #define MAX_DEQUE_SIZE 300
 
@@ -23,11 +25,9 @@
 #define SCREEN_CM_W 59.77
 #define SCREEN_CM_H 33.62
 
-// #define YIN_OFFSET_COEFFICIENT 1.01419582566  // Yin algo a little off, apply to log values
+// #define YIN_OFFSET_COEFFICIENT 1.01419582566  // Yin algo coefficient value calculateda
 #define YIN_OFFSET_COEFFICIENT 1.02  // Yin algo a little off, apply to log values
-std::mutex fensterMutex;
 
-// Initialize once for fft
 /*
 FFTSIZE |  Period Sampled (ms)
 256     |  5.3
@@ -37,56 +37,26 @@ FFTSIZE |  Period Sampled (ms)
 4096    |  85.3
 8192    |  171.0
 32768   |  683.0
-
-
 */
-// #define FFTSIZE 8192 // must be power of 2
-#define FFTSIZE 1024 // must be power of 2
-#define NUM_SNAPSHOTS 5
 
-// #define FFTSIZE 4096 // must be power of 2
+#define FFTSIZE 1024 // must be power of 2
 const unsigned int sampleRate = 48000;
-const unsigned int PAD = 500;//500; // if you get segfault try making pad bigger
-float freqs[FFTSIZE];
+const unsigned int PAD = 500; // if you get segfault try making pad bigger
 float yinBuffer[FFTSIZE];
 int16_t yinBuffer2[FFTSIZE];
-std::vector<float> buf(audiofft::AudioFFT::ComplexSize(FFTSIZE) + PAD);
-std::vector<float> re(audiofft::AudioFFT::ComplexSize(FFTSIZE) + PAD);
-std::vector<float> im(audiofft::AudioFFT::ComplexSize(FFTSIZE) + PAD);
 std::vector<float> output(FFTSIZE);
-audiofft::AudioFFT fft;
+
+// pitch input
 std::deque<float> freqMem;
+
+// snapshots
+#define NUM_SNAPSHOTS 5
 std::deque<float>* savedFreqMem [5];
 bool displaySnapshots = false;
 unsigned int displayCount = 0;
 
-struct SizingData
-{
-    const unsigned int legibleSizePixels = 16;
-    unsigned int resX;
-    unsigned int resY;
-    unsigned int screenSizeX;
-    unsigned int screenSizeY;
-    unsigned int scale;
-};
+std::mutex fensterMutex;
 
-struct WinData
-{
-    fenster* f = NULL;
-    bool isFirst = false;
-    float freq = 0.0;
-    float mag = 0.0;
-    unsigned int ind = 0;
-
-    WinData(fenster* a, bool b, float c, float d, unsigned int e)
-    {
-        f = a;
-        isFirst = b;
-        freq = c;
-        mag = d;
-        ind = e;
-    }
-};
 
 // display manager
 class Manager
@@ -150,39 +120,10 @@ public:
         return false;
     }
 
-    // currently gets called from the callback
-    void update(WinData winData)
-    {
-        // first time set up stuff
-
-
-        fenster* f = fensters[0];
-
-        // pressing buttons move to fast update
-        // for (int keyNum : f->keys)
-        // {
-        //     if(keyNum != 0)
-        //     {
-        //         printf("keyNum: %d\n", keyNum);
-        //     }
-        // }
-
-        if(winData.freq > 70) 
-        {
-            firstFreqReceived = true;
-        }
-        fenster_rect(f, 0, 0, W, H, 0x00000000); // clear
-        // viewPort.drawLHS(f, winData.freq, winData.mag);
-        fenster_loop(f);
-
-        // printf("Freq:%f, log10: %f, mag: %f\n", winData.freq, log10f(winData.freq), winData.mag);
-    }
-
     fenster* getAWindow(unsigned int index)
     {
         return fensters[index];
     }
-
 
 private:
     // Entries to fensters should be dynamically allocated
@@ -201,7 +142,6 @@ public:
         float convFactor = 800.0;
         unsigned int smoothingCount = 0;
         std::deque<float> smoothingBuf;
-        // std::deque<float>* snapshots [NUM_SNAPSHOTS];
         unsigned int snapCount = 0;
 
 
@@ -218,15 +158,12 @@ public:
         void nextSnap()
         {
             displayCount = (displayCount + 1) % 5;
-            printf("displayCount set to %d\n", displayCount);
         }
         
         void nextSnapCount()
         {
             snapCount = displayCount;
-            printf("displayCount and snapCount set to %d\n", snapCount);
         }
-
         
         bool saveSnapshot()
         {
@@ -236,15 +173,14 @@ public:
             {
                 savedFreqMem[snapCount]->push_back(val);
             }
-            printf("saved snapshot to %d\n", snapCount);
             snapCount = (snapCount + 1) % 5;
             return true;
         }
         
+        // determine targetIndex from new frequency input
         void setViewBase(fenster* f, float freq)
         {
-            // volume filter and freq
-            // printf("Freq:%f, log10: %f, invLog10: %f\n", freq, log10f(invLog10(freq)), invLog10(freq));
+            // filter low/high frequencies
             if (freq > log10f(70) && freq < log10f(1800))
             {
                 // control baseIndex position (should work off single freq input)
@@ -255,16 +191,12 @@ public:
                     if (inputIndex == baseIndex + TARGET_BUFFER)
                     {
                         targetReached = true;
-                        // finalApproach = true;
                         return;
                     }
                     targetReached = false;
                     int newBase = inputIndex - TARGET_BUFFER;
                     targetIndex = (newBase >= 0) ? newBase : 0;
-                    // delta = (freqLog10[baseIndex] - freqLog10[targetIndex]) / 10;
-                    // delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 10; // -delta
                     delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 120; // -delta
-                    // printf("low: inputIndex: %d, baseIndex: %d, targetIndex: %d, delta: %f\n", inputIndex, baseIndex, targetIndex, delta);
                 }
                 else if (inputIndex >= baseIndex + NUM_OF_LINES_EXPECTED + TARGET_BUFFER)
                 {
@@ -277,9 +209,7 @@ public:
                     targetReached = false;
                     int newBase = inputIndex - NUM_OF_LINES_EXPECTED + TARGET_BUFFER;
                     targetIndex = (newBase >= 0) ? newBase : 0;
-                    // delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 10; // +delta
                     delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 120; // +delta
-                    // printf("high: inputIndex: %d, baseIndex: %d, targetIndex: %d, delta: %f\n", inputIndex, baseIndex, targetIndex, delta);
                 }
                 else
                 {
@@ -289,11 +219,11 @@ public:
             }
         }
 
-        // Called without a new freq
+        // Draws the grid at each note (only A,B,C,D,E,F)
         void drawNoteLines(fenster* f)
         {
-            // printf("drawNotesLines\n");
-            // update baseIndex as needed
+            // offset is used to display shifts in view 
+            // once target is reached, baseIndex is updated and offset is reset.
             offset = delta * deltaFactor;
             bool increaseBaseIndex = true;
             int i = 0;
@@ -301,76 +231,27 @@ public:
 
             if (baseIndex != targetIndex)
             {
-                // while (increaseBaseIndex)
-                // {
-                    if (delta > 0)
+                if (delta > 0)
+                {
+                    if (freqLog10[baseIndex] + offset >= freqLog10[targetIndex]) 
                     {
-                        if (freqLog10[baseIndex] + offset >= freqLog10[targetIndex]) 
-                        {
-                            baseIndex = targetIndex;
-                            deltaFactor = 0;
-                        }
-                        
-                        // if (freqLog10[baseIndex] + offset >= freqLog10[baseIndex + i + 1]) 
-                        // {
-                        //     i++;
-                        //     isIncremented = true;
-                        //     //edgecase
-                        //     if (baseIndex > targetIndex)
-                        //     {
-                        //         baseIndex = targetIndex;
-                        //         deltaFactor = 0;
-                        //         break;
-                        //     }
-                        // }
-                        // else
-                        // {
-                        //     increaseBaseIndex = false;
-                        //     if (isIncremented)
-                        //     {
-                        //         // baseIndex += (i - 1);
-                        //         baseIndex += (i);
-                        //         deltaFactor = 0;
-                        //     }
-                        // }
+                        baseIndex = targetIndex;
+                        deltaFactor = 0;
                     }
-                    else
+                }
+                else
+                {
+                    if (freqLog10[baseIndex] + offset <= freqLog10[targetIndex])
                     {
-                        if (freqLog10[baseIndex] + offset <= freqLog10[targetIndex])
-                        {
-                            baseIndex = targetIndex;
-                            deltaFactor = 0;
-                        }
-                        // if (freqLog10[baseIndex] + offset <= freqLog10[baseIndex - i - 1])
-                        // {
-                        //     i++;
-                        //     isIncremented = true;
-                        //     //edgecase
-                        //     if (baseIndex < targetIndex)
-                        //     {
-                        //         baseIndex = targetIndex;
-                        //         deltaFactor = 0;
-                        //         break;
-                        //     }
-                        // }
-                        // else
-                        // {
-                        //     increaseBaseIndex = false;
-                        //     if (isIncremented)
-                        //     {
-                        //         // baseIndex -= (i - 1);
-                        //         baseIndex -= (i);
-                        //         deltaFactor = 0;
-                        //     }
-                        // }
+                        baseIndex = targetIndex;
+                        deltaFactor = 0;
                     }
-                // }
+                }
             }
             else
             {
                 deltaFactor = 0;
             }
-            // printf("delta: %f, factor: %d, baseIndex: %d, targetIndex: %d\n", delta, deltaFactor, baseIndex, targetIndex);
             
             // draw
             offset = delta * deltaFactor;
@@ -381,17 +262,10 @@ public:
                 // calculate ypos
                 float linePos = (freqLog10[i] - freqLog10[baseIndex] - offset) * convFactor;
                 float yPos = H-10 - linePos;
-                if(i == baseIndex)
-                {
-                    printf("prevyPos: %f, yPos: %f\n", prevPos, yPos);
-                    prevPos = yPos;
-                }
                 
-                // stop drawing yPos is out of range
-                if ((yPos - RECT_SIZE) <= 0)
+                // stop drawing when yPos is out of range
+                if ((yPos - RECT_SIZE_5) <= 0)
                 {
-                    // only draw a few lines
-                    // printf("lines drawn: %d", i - baseIndex - 1);
                     break;
                 }
             
@@ -412,7 +286,8 @@ public:
                     }
                 }
 
-                // draw lines that stand out
+#if MYDEBUG == 1
+                // draw lower, upper, and target index lines
                 if(i == baseIndex + TARGET_BUFFER)
                 {
                    fenster_rect(f, 0, static_cast<int>(yPos), W-1, 3, 0x0ca102); // draw horizontals green
@@ -425,7 +300,7 @@ public:
                 {
                    fenster_rect(f, 0, static_cast<int>(yPos), W-1, 3, 0xf24413); // draw horizontals red
                 }
-
+#endif // MYDEBUG
                 
             }
             if (isIncremented)
@@ -440,7 +315,6 @@ public:
 
         // draw pitch tracker
         void drawPitch(fenster* f, const std::deque<float>* frequenciesLog)
-
         {
             int j = 0;
             float baseFreqLog = freqLog10[baseIndex];
@@ -471,17 +345,15 @@ Manager manager;
 // This is what gets called on receiving audio data.
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
 {
-    static int callback = 0;
-    // printf("callback: %d\n", callback);
-    callback++;
-    // Each frame contains samples (1 sample per frame for my mono audio setup)
-    // Each time this is called it has some number of frames. 
-    // Track and Store frames and trigger once enough frames are collected.
+    /*
+     Each frame contains samples (1 sample per frame for my mono audio setup)
+     Each time this is called it has some number of frames. 
+     Track and Store frames and trigger once enough frames are collected.
+    */
     static ma_uint32 totalFrameCount = 0;
     int16_t bufForYin [FFTSIZE + 500];
     for (int i = 0; i < frameCount; i++)
     {
-        // buf[i + totalFrameCount] = ((float*)pInput)[i];
         bufForYin[i + totalFrameCount] = ((int16_t*)pInput)[i];
     }
     totalFrameCount += frameCount;
@@ -489,34 +361,15 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
     // Process stored frames.
     if (totalFrameCount >= FFTSIZE)
     {
-        // fft gone new friend with Yin
-        // calculate fft and get max freq
-        // fft.fft(buf.data(), re.data(), im.data());
-        float max = 0.0;
-        int ind = 0;
-        // for (int i = 0; i < re.size(); i++)
-        // {
-        //     float current = re[i] * re[i];
-        //     if (current > max)
-        //     {
-        //         max = current;
-        //         ind = i;
-        //     }
-        // }
+        const float uncertainty = 0.05;
 
         Yin yin;
-        const float uncertainty = 0.05;
         Yin_init(&yin, FFTSIZE, uncertainty);
-        // Yin_init(&yin, FFTSIZE, 0.10);
         float pitch = Yin_getPitch(&yin, bufForYin);
-        // static bool first = true;
-
-        // WinData winData(NULL, first, pitch, 0.0, 0.0);
         
         fensterMutex.lock();
-        static int popped = 0;
-        popped++;
-        if (freqMem.size() > MAX_DEQUE_SIZE) {freqMem.pop_back(); printf("popped: %d\n", popped);}
+        if (freqMem.size() > MAX_DEQUE_SIZE) {freqMem.pop_back();}
+        // filter input, really only designed for 110Hz+
         if (pitch > 70.0)
         {
             freqMem.push_front(log10f(pitch) * YIN_OFFSET_COEFFICIENT);
@@ -525,17 +378,14 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
         {
             freqMem.push_front(0.0);
         }
-        // manager.update(winData);
         fensterMutex.unlock();
         
         totalFrameCount = 0;
-        // first = false;
     }
-
-    (void)pOutput; // what the hell does this do?
+    (void)pOutput;
 }
 
-
+// Deal with keyboard input
 void processKeys(fenster* f)
 {
     if (f->keys[83])
@@ -575,19 +425,14 @@ void processKeys(fenster* f)
     }
 }
 
+// I don't know why it needs an input file but that is annoying. 
+// I may not need that anymore but not sure.
 int main(int argc, char** argv)
 {
     if (argc < 2) {
         printf("No output file.\n");
         return -1;
     }
-
-    // Set up expected frequency bins
-    for(int i = 0; i < FFTSIZE; i++)
-    {
-        freqs[i] = (i * sampleRate) / FFTSIZE;
-    }
-    // fft.init(FFTSIZE);
 
     ma_result result;
     ma_encoder_config encoderConfig;
@@ -611,7 +456,6 @@ int main(int argc, char** argv)
     deviceConfig.sampleRate       = encoder.config.sampleRate;
     deviceConfig.dataCallback     = data_callback;
     deviceConfig.pUserData        = &encoder;
-    // deviceConfig.fensterWin       = &f;
 
     result = ma_device_init(NULL, &deviceConfig, &device);
     if (result != MA_SUCCESS) {
@@ -630,8 +474,6 @@ int main(int argc, char** argv)
     int count = 0;
     while(1)
     {
-        
-
         fensterMutex.lock();
         if (!freqMem.empty() && !manager.isInitialized()) 
         {
@@ -659,11 +501,7 @@ int main(int argc, char** argv)
 
             fenster_loop(f);
 
-            // printf("freqMem size: %d\n", freqMem.size());
         }
-        //     printf("main\n");
-        //     manager.viewPort.drawNoteLines(f);
-            
         fensterMutex.unlock();
 
         // sleep 
@@ -675,8 +513,6 @@ int main(int argc, char** argv)
         now = time;
         count++;
     }
-    // printf("Press Enter to stop recording...\n");
-    // getchar();
     
     ma_device_uninit(&device);
     ma_encoder_uninit(&encoder);

@@ -4,11 +4,11 @@
 #define Wi 640
 // #define He 480 
 #define He 720 
-#define RECT_SIZE 5
+#define RECT_SIZE_5 5
 
 #include "fenster.h"   // window and graphics
 
-#if MYDEBUG == 0
+#if MYDEBUG == 1
 #include <stdio.h>
 #endif
 
@@ -30,7 +30,7 @@ static bool fenster_rect_bounds_is_safe(int posX, int posY, int cols, int rows)
   )
   {
     isBoundSafe = false;
-#if MYDEBUG == 0
+#if MYDEBUG == 1
     printf("Bounds: x:%d, y:%d, cols:%d, rows:%d\n", posX, posY, cols, rows);
 #endif
   }

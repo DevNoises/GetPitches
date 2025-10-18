@@ -7115,7 +7115,6 @@ struct ma_device_config
     ma_device_notification_proc notificationCallback;
     ma_stop_proc stopCallback;
     void* pUserData;
-    void* fensterWin;
     ma_resampler_config resampling;
     struct
     {
@@ -7789,7 +7788,6 @@ struct ma_device
     ma_device_notification_proc onNotification; /* Set once at initialization time and should not be changed after. */
     ma_stop_proc onStop;                        /* DEPRECATED. Use the notification callback instead. Set once at initialization time and should not be changed after. */
     void* pUserData;                            /* Application defined data. */
-    void* fensterWin;
     ma_mutex startStopLock;
     ma_event wakeupEvent;
     ma_event startEvent;
@@ -43588,8 +43586,6 @@ MA_API ma_result ma_device_init(ma_context* pContext, const ma_device_config* pC
     pDevice->onData         = pConfig->dataCallback;
     pDevice->onNotification = pConfig->notificationCallback;
     pDevice->onStop         = pConfig->stopCallback;
-
-    pDevice->fensterWin     = pConfig->fensterWin;
 
     if (pConfig->playback.pDeviceID != NULL) {
         MA_COPY_MEMORY(&pDevice->playback.id, pConfig->playback.pDeviceID, sizeof(pDevice->playback.id));
