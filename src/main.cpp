@@ -165,7 +165,7 @@ public:
             snapCount = displayCount;
         }
         
-        bool saveSnapshot()
+        bool saveSnapshot(fenster* f = NULL)
         {
             if(freqMem.empty()) { return false; }
             savedFreqMem[snapCount]->clear();
@@ -196,7 +196,7 @@ public:
                     targetReached = false;
                     int newBase = inputIndex - TARGET_BUFFER;
                     targetIndex = (newBase >= 0) ? newBase : 0;
-                    delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 120; // -delta
+                    delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 60; // -delta
                 }
                 else if (inputIndex >= baseIndex + NUM_OF_LINES_EXPECTED + TARGET_BUFFER)
                 {
@@ -209,7 +209,7 @@ public:
                     targetReached = false;
                     int newBase = inputIndex - NUM_OF_LINES_EXPECTED + TARGET_BUFFER;
                     targetIndex = (newBase >= 0) ? newBase : 0;
-                    delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 120; // +delta
+                    delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 60; // +delta
                 }
                 else
                 {
@@ -344,7 +344,8 @@ public:
             float baseFreqLog = freqLog10[baseIndex];
             for (float val : *frequenciesLog)
             {
-                float xPos = W - 15 - (j * 10);
+                // float xPos = W - 15 - (j * 10);
+                float xPos = W - 15 - (j * 4);
                 if (val < 1.0)
                 {
                     // don't not draw if freq input is 0.0 / bad
@@ -352,12 +353,12 @@ public:
                 else
                 {
                     float yPos = H - ((val - baseFreqLog - offset) * convFactor);
-                    // fenster_rect(f, static_cast<int>(xPos - 10), static_cast<int>(yPos), 5, 5, 0xFFF426);
                     if (xPos <= 30) {j++; continue;}
                     fenster_rect(f, static_cast<int>(xPos - 10), static_cast<int>(yPos), 5, 5, 0xFFF426);
                 }
                 j++;
             }
+            fenster_text(f, W/2 - 5 , 5 , noteName[freqToIndex(invLog10(frequenciesLog->front())) - 2], 10, 0xffffffff);
         }
     };
     ViewPort viewPort;
@@ -415,7 +416,7 @@ void processKeys(fenster* f)
     if (f->keys[83])
     {
         bool success = false;
-        if(manager.viewPort.saveSnapshot())
+        if(manager.viewPort.saveSnapshot(f))
         {
             success = true;
         }
@@ -513,13 +514,20 @@ int main(int argc, char** argv)
         {
             fenster* f = manager.getAWindow(0);
 
-            fenster_rect(f, 0, 0, W, H, 0x00993939); // clear
+            fenster_rect(f, 0, 0, W, H, 0x00000000); // clear
             manager.viewPort.setViewBase(f, freqMem.front());
             manager.viewPort.drawNoteLines(f);
             manager.viewPort.drawPitch(f, &freqMem);
             if (displaySnapshots)
             {
                 manager.viewPort.drawPitch(f, savedFreqMem[displayCount]);
+                char dispText[20];
+                snprintf(dispText, 20, "showing:%d\n", displayCount);
+                fenster_text(f, 15 , 15 , dispText, 5, 0xffffffff);
+                
+                char saveText [20];
+                snprintf(saveText, 20, "saved %d/%d", manager.viewPort.snapCount, NUM_SNAPSHOTS);
+                fenster_text(f, 15, 50, saveText, 5, 0xffffffff);
             }
             processKeys(f);
 
