@@ -1,5 +1,6 @@
 rmdir build /s /q 
 mkdir build
+del log.txt
 
 @REM debug build
 @REM g++ -g src/main.cpp src/miniaudio.c src/AudioFFT.cpp -o build/main.exe

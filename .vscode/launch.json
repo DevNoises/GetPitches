@@ -62,7 +62,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/${fileBasenameNoExtension}.exe",
-            "args": ["outputfile.wav"],
+            "args": ["outputfile.wav", ">", "log.txt"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

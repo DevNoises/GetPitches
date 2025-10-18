@@ -4,10 +4,11 @@
 #define Wi 640
 // #define He 480 
 #define He 720 
+#define RECT_SIZE 5
 
 #include "fenster.h"   // window and graphics
 
-#if MYDEBUG == 1
+#if MYDEBUG == 0
 #include <stdio.h>
 #endif
 
@@ -21,13 +22,16 @@ static bool fenster_rect_bounds_is_safe(int posX, int posY, int cols, int rows)
   if (x_draw_range > Wi || 
       y_draw_range > He ||
       x_draw_range <  0 ||
-      y_draw_range <  0
+      y_draw_range <  0 ||
+      posX         > Wi ||
+      posY         > He ||
+      posX         <  0 ||
+      posY         <  0
   )
   {
     isBoundSafe = false;
-#if MYDEBUG == 1
-    printf("fenster_rect draw is out of bounds. Skip Drawing\n");
-    printf("x draw range: %d\ny draw range: %d\n", x_draw_range, y_draw_range);
+#if MYDEBUG == 0
+    printf("Bounds: x:%d, y:%d, cols:%d, rows:%d\n", posX, posY, cols, rows);
 #endif
   }
   return isBoundSafe;

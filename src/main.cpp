@@ -190,7 +190,7 @@ private:
 public:
     struct ViewPort 
     {
-        const unsigned int NUM_OF_LINES_EXPECTED = 30;
+        const unsigned int NUM_OF_LINES_EXPECTED = 20;
         const unsigned int TARGET_BUFFER = 10;
         unsigned int baseIndex = 25;
         unsigned int targetIndex= 25;
@@ -262,10 +262,11 @@ public:
                     int newBase = inputIndex - TARGET_BUFFER;
                     targetIndex = (newBase >= 0) ? newBase : 0;
                     // delta = (freqLog10[baseIndex] - freqLog10[targetIndex]) / 10;
-                    delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 10; // -delta
+                    // delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 10; // -delta
+                    delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 120; // -delta
                     // printf("low: inputIndex: %d, baseIndex: %d, targetIndex: %d, delta: %f\n", inputIndex, baseIndex, targetIndex, delta);
                 }
-                else if (inputIndex >= baseIndex + NUM_OF_LINES_EXPECTED - TARGET_BUFFER)
+                else if (inputIndex >= baseIndex + NUM_OF_LINES_EXPECTED + TARGET_BUFFER)
                 {
                     // target high
                     if ( ((inputIndex - NUM_OF_LINES_EXPECTED + TARGET_BUFFER) == targetIndex) )
@@ -276,7 +277,8 @@ public:
                     targetReached = false;
                     int newBase = inputIndex - NUM_OF_LINES_EXPECTED + TARGET_BUFFER;
                     targetIndex = (newBase >= 0) ? newBase : 0;
-                    delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 10; // +delta
+                    // delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 10; // +delta
+                    delta = (freqLog10[targetIndex] - freqLog10[baseIndex]) / 120; // +delta
                     // printf("high: inputIndex: %d, baseIndex: %d, targetIndex: %d, delta: %f\n", inputIndex, baseIndex, targetIndex, delta);
                 }
                 else
@@ -294,62 +296,75 @@ public:
             // update baseIndex as needed
             offset = delta * deltaFactor;
             bool increaseBaseIndex = true;
-            int i = 1;
+            int i = 0;
             bool isIncremented = false;
 
             if (baseIndex != targetIndex)
             {
-                while (increaseBaseIndex)
-                {
+                // while (increaseBaseIndex)
+                // {
                     if (delta > 0)
                     {
-                        if (freqLog10[baseIndex] + offset >= freqLog10[baseIndex + i]) 
+                        if (freqLog10[baseIndex] + offset >= freqLog10[targetIndex]) 
                         {
-                            i++;
-                            isIncremented = true;
-                            //edgecase
-                            if (baseIndex > targetIndex)
-                            {
-                                baseIndex = targetIndex;
-                                deltaFactor = 0;
-                                break;
-                            }
+                            baseIndex = targetIndex;
+                            deltaFactor = 0;
                         }
-                        else
-                        {
-                            increaseBaseIndex = false;
-                            if (isIncremented)
-                            {
-                                baseIndex += (i - 1);
-                                deltaFactor = 0;
-                            }
-                        }
+                        
+                        // if (freqLog10[baseIndex] + offset >= freqLog10[baseIndex + i + 1]) 
+                        // {
+                        //     i++;
+                        //     isIncremented = true;
+                        //     //edgecase
+                        //     if (baseIndex > targetIndex)
+                        //     {
+                        //         baseIndex = targetIndex;
+                        //         deltaFactor = 0;
+                        //         break;
+                        //     }
+                        // }
+                        // else
+                        // {
+                        //     increaseBaseIndex = false;
+                        //     if (isIncremented)
+                        //     {
+                        //         // baseIndex += (i - 1);
+                        //         baseIndex += (i);
+                        //         deltaFactor = 0;
+                        //     }
+                        // }
                     }
                     else
                     {
-                        if (freqLog10[baseIndex] + offset <= freqLog10[baseIndex - i])
+                        if (freqLog10[baseIndex] + offset <= freqLog10[targetIndex])
                         {
-                            i++;
-                            isIncremented = true;
-                            //edgecase
-                            if (baseIndex < targetIndex)
-                            {
-                                baseIndex = targetIndex;
-                                deltaFactor = 0;
-                                break;
-                            }
+                            baseIndex = targetIndex;
+                            deltaFactor = 0;
                         }
-                        else
-                        {
-                            increaseBaseIndex = false;
-                            if (isIncremented)
-                            {
-                                baseIndex -= (i - 1);
-                                deltaFactor = 0;
-                            }
-                        }
+                        // if (freqLog10[baseIndex] + offset <= freqLog10[baseIndex - i - 1])
+                        // {
+                        //     i++;
+                        //     isIncremented = true;
+                        //     //edgecase
+                        //     if (baseIndex < targetIndex)
+                        //     {
+                        //         baseIndex = targetIndex;
+                        //         deltaFactor = 0;
+                        //         break;
+                        //     }
+                        // }
+                        // else
+                        // {
+                        //     increaseBaseIndex = false;
+                        //     if (isIncremented)
+                        //     {
+                        //         // baseIndex -= (i - 1);
+                        //         baseIndex -= (i);
+                        //         deltaFactor = 0;
+                        //     }
+                        // }
                     }
-                }
+                // }
             }
             else
             {
@@ -359,12 +374,28 @@ public:
             
             // draw
             offset = delta * deltaFactor;
+            fenster_rect(f, 20, 0, 2, H-1, 0x00333333);  // draw vertical line once
+            static float prevPos = 0.0;
             for (unsigned int i = baseIndex; i < NOTE_ARR_SIZE; i++)
             {
-                float linePos = (freqLog10[i] - freqLog10[baseIndex] + offset) * convFactor;
+                // calculate ypos
+                float linePos = (freqLog10[i] - freqLog10[baseIndex] - offset) * convFactor;
                 float yPos = H-10 - linePos;
-                fenster_rect(f, 20, 0, 2, H-1, 0x00333333);
-                fenster_rect(f, 0, static_cast<int>(yPos), W-1, 2, 0x00333333);
+                if(i == baseIndex)
+                {
+                    printf("prevyPos: %f, yPos: %f\n", prevPos, yPos);
+                    prevPos = yPos;
+                }
+                
+                // stop drawing yPos is out of range
+                if ((yPos - RECT_SIZE) <= 0)
+                {
+                    // only draw a few lines
+                    // printf("lines drawn: %d", i - baseIndex - 1);
+                    break;
+                }
+            
+                fenster_rect(f, 0, static_cast<int>(yPos), W-1, 2, 0x00333333); // draw horizontals
                 
                 // toneMask to only print out the single letters A - G
                 const unsigned int fullToneMask = 0xAB5;
@@ -374,14 +405,28 @@ public:
                     snprintf(oct, 2, "%d", octave[i]);
                     fenster_text(f, 4, yPos-4, noteName[i], 2, 0xffffffff);
                     fenster_text(f, 12, yPos-4, oct, 2, 0xffffffff);
+                    // highligth C lines
+                    if('C' == (noteName[i][0]))
+                    {
+                        fenster_rect(f, 0, static_cast<int>(yPos), W-1, 3, 0x00333333);
+                    }
                 }
 
-                if (yPos <= 0)
+                // draw lines that stand out
+                if(i == baseIndex + TARGET_BUFFER)
                 {
-                    // only draw a few lines
-                    // printf("lines drawn: %d", i - baseIndex - 1);
-                    break;
+                   fenster_rect(f, 0, static_cast<int>(yPos), W-1, 3, 0x0ca102); // draw horizontals green
                 }
+                if(i == baseIndex + NUM_OF_LINES_EXPECTED + TARGET_BUFFER)
+                {
+                   fenster_rect(f, 0, static_cast<int>(yPos), W-1, 3, 0x0915ed); // draw horizontals blue 
+                }
+                if(i == targetIndex + TARGET_BUFFER)
+                {
+                   fenster_rect(f, 0, static_cast<int>(yPos), W-1, 3, 0xf24413); // draw horizontals red
+                }
+
+                
             }
             if (isIncremented)
             {
@@ -394,7 +439,6 @@ public:
         }
 
         // draw pitch tracker
-        // void drawPitch(fenster* f)
         void drawPitch(fenster* f, const std::deque<float>* frequenciesLog)
 
         {
@@ -409,8 +453,9 @@ public:
                 }
                 else
                 {
-                    float yPos = H - ((val - baseFreqLog + offset) * convFactor);
+                    float yPos = H - ((val - baseFreqLog - offset) * convFactor);
                     // fenster_rect(f, static_cast<int>(xPos - 10), static_cast<int>(yPos), 5, 5, 0xFFF426);
+                    if (xPos <= 30) {j++; continue;}
                     fenster_rect(f, static_cast<int>(xPos - 10), static_cast<int>(yPos), 5, 5, 0xFFF426);
                 }
                 j++;

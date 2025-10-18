@@ -47,5 +47,6 @@
         "streambuf": "cpp",
         "typeinfo": "cpp",
         "complex": "cpp"
-    }
+    },
+    "vim.useSystemClipboard": true
 }
