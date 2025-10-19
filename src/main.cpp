@@ -420,7 +420,6 @@ void processKeys(fenster* f)
         {
             success = true;
         }
-        printf("saveSnapshot status: %d\n", success);
         f->keys[83] = 0;
     }
 
@@ -435,14 +434,12 @@ void processKeys(fenster* f)
     {
         // display
         displaySnapshots = (displaySnapshots) ? false : true;
-        printf("display set to %d\n", displaySnapshots);
         f->keys[67] = 0;
     }
     
     if (f->keys[79]) // O/verwrite
     {
         // display
-        printf("overwriting snap %d\n", displayCount);
         manager.viewPort.nextSnapCount();
         manager.viewPort.saveSnapshot();
 
@@ -454,10 +451,10 @@ void processKeys(fenster* f)
 // I may not need that anymore but not sure.
 int main(int argc, char** argv)
 {
-    if (argc < 2) {
-        printf("No output file.\n");
-        return -1;
-    }
+    // if (argc < 2) {
+    //     printf("No output file.\n");
+    //     return -1;
+    // }
 
     ma_result result;
     ma_encoder_config encoderConfig;
@@ -470,7 +467,8 @@ int main(int argc, char** argv)
     encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_s16, 1, sampleRate); // s16 for Yin algo
     // encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_s16, 1, ma_standard_sample_rate_192000); // s16 for Yin algo
 
-    if (ma_encoder_init_file(argv[1], &encoderConfig, &encoder) != MA_SUCCESS) {
+    // if (ma_encoder_init_file(argv[1], &encoderConfig, &encoder) != MA_SUCCESS) {
+    if (ma_encoder_init_file("output.wav", &encoderConfig, &encoder) != MA_SUCCESS) {
         printf("Failed to initialize output file.\n");
         return -1;
     }
